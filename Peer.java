@@ -6,6 +6,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.Random;
 import java.util.Scanner;
 
 public class Peer {
@@ -23,12 +24,51 @@ public class Peer {
         DataInputStream in = new DataInputStream(vps.getInputStream());
         DataOutputStream out = new DataOutputStream(vps.getOutputStream());
 
+        // ---- Session ID handshake ----
+        System.out.print("Host new session or join existing? [H/j]: ");
+        String hj = sc.nextLine().trim();
+        boolean isHost = hj.isEmpty() || hj.equalsIgnoreCase("h");
+
+        if (isHost) {
+            String sessionId = generateId();
+            out.writeUTF("HOST");
+            out.writeUTF(sessionId);
+            out.flush();
+            String resp = in.readUTF(); // "WAITING" or "ID_TAKEN"
+            if (resp.equals("ID_TAKEN")) {
+                LogUtils.warn("ID collision — please reconnect and try again.");
+                vps.close();
+                return;
+            }
+            // resp == "WAITING"
+            LogUtils.success("Session ID: \033[1;33m" + sessionId + "\033[0m  — share this with your peer");
+            LogUtils.info("Waiting up to 3 minutes for peer to join...");
+        } else {
+            System.out.print("Session ID: ");
+            String sessionId = sc.nextLine().trim().toUpperCase();
+            out.writeUTF("JOIN");
+            out.writeUTF(sessionId);
+            out.flush();
+            String resp = in.readUTF(); // "FOUND" or "NOT_FOUND"
+            if (resp.equals("NOT_FOUND")) {
+                LogUtils.warn("No active session with ID: " + sessionId);
+                vps.close();
+                return;
+            }
+            // resp == "FOUND"
+            LogUtils.success("Host found! Connecting...");
+        }
+        // ---- End handshake ----
+
         out.writeInt(listenPort);
         out.flush();
 
-        LogUtils.info("Waiting for peer to join...");
-
         String role = in.readUTF();
+        if (role.equals("TIMEOUT")) {
+            LogUtils.warn("Session expired (3-minute limit). Please reconnect and generate a new ID.");
+            vps.close();
+            return;
+        }
         LogUtils.info("Role assigned: \033[1m" + role + "\033[0m");
 
         if (role.equals("LISTEN")) {
@@ -205,6 +245,16 @@ public class Peer {
         connectThread.interrupt();
 
         return result[0];
+    }
+
+    private static String generateId() {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        Random rnd = new Random();
+        StringBuilder sb = new StringBuilder(6);
+        for (int i = 0; i < 6; i++) {
+            sb.append(chars.charAt(rnd.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 
     public void connect(String ip, int port) throws Exception {

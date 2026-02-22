@@ -131,17 +131,18 @@ public class Send implements Runnable {
         long execTime = Duration.between(start, end).toMillis();
 
         dOut.flush();
+        System.out.println();
         if (fileSize >= 1024) {
             double fileSizeKB = fileSize * 1.0 / 1024.0;
             if (fileSizeKB >= 1024) {
-                LogUtils.success("\n[Sent file: " + fname + " (" + (fileSizeKB / 1024.0) + " MB)]");
+                LogUtils.success(String.format("[Sent file: " + fname + " (%.2f MB)]", (fileSizeKB / 1024.0)));
             }
             else {
-                LogUtils.success("\n[Sent file: " + fname + " (" + fileSizeKB + " KB)]");
+                LogUtils.success(String.format("[Sent file: " + fname + " (%.2f KB)]", fileSizeKB));
             }
         }
         else {
-            LogUtils.success("\n[Sent file: " + fname + " (" + fileSize + " B)]");
+            LogUtils.success("[Sent file: " + fname + " (" + fileSize + " B)]");
         }
         if (execTime >= 10000) {
             double execTimeSeconds = execTime / 1000.0;

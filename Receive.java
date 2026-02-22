@@ -139,7 +139,8 @@ public class Receive implements Runnable {
         if (currentFileBytesReceived >= expectedFileSize) {
             fOut.close();
             fOut = null;
-            LogUtils.info("\n[File received fully]");
+            System.out.println();
+            LogUtils.info("[File received fully]");
             System.out.print(localName + ": ");
         }
     }
