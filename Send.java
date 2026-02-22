@@ -32,7 +32,7 @@ public class Send implements Runnable {
 
         // Send name to the other peer, before Thread starts
         // so Receive can reliably read it at the start of its `run()`
-        System.out.println("Sending name '" + this.name + "' to the peer...");
+        LogUtils.info("Sending name '" + this.name + "' to the peer...");
         sendText(name);
     }
 
@@ -78,7 +78,7 @@ public class Send implements Runnable {
     private void sendFile(String filename) throws Exception {
         Path path = Paths.get(filename);
         if (!Files.exists(path)) {
-            System.err.println("File not found: " + filename);
+            LogUtils.error("File not found: " + filename);
             return;
         }
 
@@ -103,7 +103,7 @@ public class Send implements Runnable {
         byte[] buffer = new byte[chunkSize];
         long bytesSent = 0;
 
-        System.out.println("Uploading '" + fname + "'...");
+        LogUtils.info("Uploading \033[1;36m" + fname + "\033[0m...");
 
         Instant start = Instant.now();
         try (InputStream fis = Files.newInputStream(path)) {
@@ -124,14 +124,25 @@ public class Send implements Runnable {
                 dOut.write(chunkCipher);
 
                 bytesSent += read;
-                Utils.printProgressBar(bytesSent, fileSize);
+                LogUtils.printProgressBar(bytesSent, fileSize);
             }
         }
         Instant end = Instant.now();
         long execTime = Duration.between(start, end).toMillis();
 
         dOut.flush();
-        System.out.println("\n[Sent file: " + fname + " (" + fileSize + " B)]");
+        if (fileSize >= 1024) {
+            double fileSizeKB = fileSize * 1.0 / 1024.0;
+            if (fileSizeKB >= 1024) {
+                LogUtils.success("\n[Sent file: " + fname + " (" + (fileSizeKB / 1024.0) + " MB)]");
+            }
+            else {
+                LogUtils.success("\n[Sent file: " + fname + " (" + fileSizeKB + " KB)]");
+            }
+        }
+        else {
+            LogUtils.success("\n[Sent file: " + fname + " (" + fileSize + " B)]");
+        }
         if (execTime >= 10000) {
             double execTimeSeconds = execTime / 1000.0;
             if (execTimeSeconds >= 60.0) {

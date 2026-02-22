@@ -16,23 +16,23 @@ public class Rendezvous {
         }
 
         ServerSocket ss = new ServerSocket(port);
-        System.out.println("Rendezvous server listening on port: " + port);
-        System.out.println("Modes: PORT-FORWARD, HOLE-PUNCH, or RELAY");
+        LogUtils.info("Rendezvous server listening on port: " + port);
+        LogUtils.info("Modes: PORT-FORWARD, HOLE-PUNCH, or RELAY");
 
         while (true) {
-            System.out.println("\nWaiting for two peers...");
+            LogUtils.info("\nWaiting for two peers...");
 
             // Accept first
             Socket peer1 = ss.accept();
             String addr1 = peer1.getInetAddress().getHostAddress();
             int natPort1 = peer1.getPort(); // The port the NAT assigned for this connection
-            System.out.println("Peer 1 connected: " + addr1 + ":" + natPort1);
+            LogUtils.success("Peer 1 connected: " + addr1 + ":" + natPort1);
 
             // Accept second peer
             Socket peer2 = ss.accept();
             String addr2 = peer2.getInetAddress().getHostAddress();
             int natPort2 = peer2.getPort();
-            System.out.println("Peer 2 connected: " + addr2 + ":" + natPort2);
+            LogUtils.success("Peer 2 connected: " + addr2 + ":" + natPort2);
 
             DataInputStream in1 = new DataInputStream(peer1.getInputStream());
             DataInputStream in2 = new DataInputStream(peer2.getInputStream());
@@ -46,8 +46,8 @@ public class Rendezvous {
             boolean pf1 = listenPort1 >= 1024 && listenPort1 <= 65535;
             boolean pf2 = listenPort2 >= 1024 && listenPort2 <= 65535;
 
-            System.out.println("Peer 1: forwarded=" + (pf1 ? listenPort1 : "none") + " nat_port=" + natPort1);
-            System.out.println("Peer 2: forwarded=" + (pf2 ? listenPort2 : "none") + " nat_port=" + natPort2);
+            LogUtils.info("Peer 1: forwarded=" + (pf1 ? listenPort1 : "none") + " nat_port=" + natPort1);
+            LogUtils.info("Peer 2: forwarded=" + (pf2 ? listenPort2 : "none") + " nat_port=" + natPort2);
 
             if (pf1) {
                 // peer1
@@ -62,7 +62,7 @@ public class Rendezvous {
                 out2.writeUTF(addr1);
                 out2.flush();
 
-                System.out.println("Mode: PORT-FORWARD (Peer2 -> Peer1:" + listenPort1 + ")");
+                LogUtils.info("Mode: PORT-FORWARD (Peer2 -> Peer1:" + listenPort1 + ")");
                 peer1.close();
                 peer2.close();
             }
@@ -79,7 +79,7 @@ public class Rendezvous {
                 out2.writeUTF(addr1);
                 out2.flush();
 
-                System.out.println("Mode: PORT-FORWARD (Peer1 -> Peer2:" + listenPort2 + ")");
+                LogUtils.info("Mode: PORT-FORWARD (Peer1 -> Peer2:" + listenPort2 + ")");
                 peer1.close();
                 peer2.close();
             }
@@ -106,7 +106,7 @@ public class Rendezvous {
                 out1.flush();
                 out2.flush();
 
-                System.out.println("Mode: HOLE-PUNCH ("
+                LogUtils.info("Mode: HOLE-PUNCH ("
                     + addr1 + ":" + natPort1
                     + " <-> "
                     + addr2 + ":" + natPort2 + ")");
@@ -123,7 +123,7 @@ public class Rendezvous {
                 out2.writeUTF("RELAY");
                 out2.flush();
 
-                System.out.println("Mode: RELAY (same public IP or symmetric NAT)");
+                LogUtils.info("Mode: RELAY (same public IP or symmetric NAT)");
 
                 // Start relay threads
                 Thread t1 = new Thread(() -> relay(peer1, peer2, "Peer1->Peer2"));
@@ -146,7 +146,7 @@ public class Rendezvous {
             }
         }
         catch (IOException e) {
-            System.out.println(name + " relay ended");
+            LogUtils.warn(name + " relay ended");
         }
         finally {
             try { from.close(); } catch (Exception e) {}
