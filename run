@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+if [ "$1" == "-c" ]; then
+    echo "Cleaning..."
+    rm *.class
+    rm -rf received_files
+else
+    echo "Compiling..."
+    javac *.java
+fi

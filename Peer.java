@@ -269,6 +269,7 @@ public class Peer {
         System.out.println("1. Connect to peer (direct)");
         System.out.println("2. Wait for peer (direct)");
         System.out.println("3. Via VPS (NAT traversal)");
+        System.out.print("Select: ");
         int choice = peer.sc.nextInt();
         peer.sc.nextLine(); // get new line
 
@@ -311,7 +312,7 @@ public class Peer {
                 String vpsPortStr = peer.sc.nextLine();
                 int vpsPort = vpsPortStr.isEmpty() ? 8888 : Integer.parseInt(vpsPortStr);
 
-                System.out.print("Port forwarded? Enter port (or 0 for HOLE PUNCH/RELAY): ");
+                System.out.print("Port forwarded? Enter port (or 0 for HOLE-PUNCH/RELAY): ");
                 String listenPortStr = peer.sc.nextLine();
                 int listenPort = listenPortStr.isEmpty() ? 0 : Integer.parseInt(listenPortStr);
 
