@@ -24,7 +24,7 @@ public class Crypto {
 
         publicKey = kp.getPublic();
         keyAgreement = KeyAgreement.getInstance("DH");
-        keyAgreement.init(kp.getPublic());
+        keyAgreement.init(kp.getPrivate());
     }
 
     public byte[] getPublicKeyBytes() {
@@ -44,7 +44,7 @@ public class Crypto {
         aesKey = new SecretKeySpec(key, "AES");
     }
 
-    public byte[] encrypt(byte[] plaintext) throws Exception  {
+    public byte[] encrypt(byte[] plaintext) throws Exception {
         byte[] iv = new byte[12];           // GCM IV size
         new SecureRandom().nextBytes(iv);   // Use nonblocking /dev/urandom
 
