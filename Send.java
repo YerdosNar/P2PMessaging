@@ -1,3 +1,4 @@
+import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,7 +24,7 @@ public class Send implements Runnable {
     private volatile boolean running = true;
 
     public Send(Socket socket, Crypto crypto, Scanner scanner) throws Exception {
-        this.dOut = new DataOutputStream(socket.getOutputStream());
+        this.dOut = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream(), 1 << 23)); // 8 MB buffer
         this.scanner = scanner;
         this.crypto = crypto;
 
@@ -99,7 +100,7 @@ public class Send implements Runnable {
         dOut.flush();
 
         // Stream file chunks
-        int chunkSize = 1024 * 1024; // 1MB
+        int chunkSize = 8 * 1024 * 1024; // 8 MB — fewer crypto round-trips, larger TCP segments
         byte[] buffer = new byte[chunkSize];
         long bytesSent = 0;
 
@@ -131,17 +132,18 @@ public class Send implements Runnable {
         long execTime = Duration.between(start, end).toMillis();
 
         dOut.flush();
+        System.out.println();
         if (fileSize >= 1024) {
             double fileSizeKB = fileSize * 1.0 / 1024.0;
             if (fileSizeKB >= 1024) {
-                LogUtils.success("\n[Sent file: " + fname + " (" + (fileSizeKB / 1024.0) + " MB)]");
+                LogUtils.success(String.format("[Sent file: " + fname + " (%.2f MB)]", (fileSizeKB / 1024.0)));
             }
             else {
-                LogUtils.success("\n[Sent file: " + fname + " (" + fileSizeKB + " KB)]");
+                LogUtils.success(String.format("[Sent file: " + fname + " (%.2f KB)]", fileSizeKB));
             }
         }
         else {
-            LogUtils.success("\n[Sent file: " + fname + " (" + fileSize + " B)]");
+            LogUtils.success("[Sent file: " + fname + " (" + fileSize + " B)]");
         }
         if (execTime >= 10000) {
             double execTimeSeconds = execTime / 1000.0;
