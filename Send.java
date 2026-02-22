@@ -10,8 +10,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Scanner;
 
-import com.sun.tools.javap.SourceWriter;
-
 public class Send implements Runnable {
     public static final byte TYPE_TEXT   = 0x01;
     public static final byte TYPE_F_META = 0x02;
@@ -21,7 +19,7 @@ public class Send implements Runnable {
 
     private final DataOutputStream dOut;
     private final Scanner scanner;
-    private final Crypt crypto;
+    private final Crypto crypto;
     private volatile boolean running = true;
 
     public Send(Socket socket, Crypto crypto, Scanner sc) throws Exception {
@@ -112,7 +110,7 @@ public class Send implements Runnable {
             int read;
             while ((read = is.read(buffer)) > 0) {
                 byte[] chnkPayload;
-                if (read == chnkSize) {
+                if (read == chunksize) {
                     chnkPayload = buffer;
                 }
                 else {
@@ -125,14 +123,14 @@ public class Send implements Runnable {
                 dOut.write(chnkCipher);
 
                 bytesSent += read;
-                Utils.printProgressBar(bytesSend, filesize);
+                Utils.printProgressBar(bytesSent, filesize);
             }
         }
         Instant end = Instant.now();
         long execTime = Duration.between(start, end).toMillis();
 
         dOut.flush();
-        System.out.println("\n[Sent file: " + fname + " (" + fileSize + " B)]");
+        System.out.println("\n[Sent file: " + fname + " (" + filesize + " B)]");
         if (execTime >= 10000) {
             double execTimeSeconds = execTime / 1000.0;
             if (execTimeSeconds >= 60.0) {
