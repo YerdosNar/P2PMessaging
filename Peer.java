@@ -151,7 +151,8 @@ public class Peer {
                     }
                     lock.notifyAll();
                 }
-            } catch (IOException e) {
+            }
+            catch (IOException e) {
                 // Timed out or interrupted - connect thread may still win
             }
         });
@@ -176,7 +177,8 @@ public class Peer {
                         lock.notifyAll();
                     }
                     return;
-                } catch (IOException e) {
+                }
+                catch (IOException e) {
                     System.out.println("Punch attempt " + attempt + "/15 failed, retrying...");
                     try { Thread.sleep(1000); } catch (InterruptedException ie) { return; }
                 }
@@ -317,9 +319,6 @@ public class Peer {
                 int listenPort = listenPortStr.isEmpty() ? 0 : Integer.parseInt(listenPortStr);
 
                 peer.punch(vpsIp, vpsPort, listenPort);
-            }
-            else {
-                System.err.println("Unknown choice...");
             }
         }
         catch (Exception e) {

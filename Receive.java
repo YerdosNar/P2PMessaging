@@ -113,7 +113,19 @@ public class Receive implements Runnable {
 
         fOut = Files.newOutputStream(savePath);
 
-        System.out.print("\r[Receiving file: " + safeName + " (" + expectedFileSize + " B)]");
+        if (expectedFileSize >= 1024) {
+            double expectedFileSizeKB = expectedFileSize * 1.0 / 1024.0;
+
+            if (expectedFileSizeKB >= 1024) {
+                System.out.printf("\r[Receiving file: %s (%.2f MB)]\n", safeName, expectedFileSizeKB * 1.0 / 1024.0);
+            }
+            else {
+                System.out.printf("\r[Receiving file: %s (%.2f KB)]\n", safeName, expectedFileSizeKB);
+            }
+        }
+        else {
+            System.out.print("\r[Receiving file: " + safeName + " (" + expectedFileSize + " B)]\n");
+        }
     }
 
     private void handleFileChunk(byte[] payload) throws Exception {

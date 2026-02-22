@@ -83,7 +83,7 @@ public class Rendezvous {
                 peer1.close();
                 peer2.close();
             }
-            else if (!addr2.equals(addr2)) {
+            else if (!addr1.equals(addr2)) {
                 // They are not in the same NAT
                 //
                 // Tell each peer:

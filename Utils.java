@@ -68,10 +68,10 @@ public class Utils {
                 case UNIX:
                     cachedConsoleWidth = getUnixConsoleWidth();
                 default:
-                    cachedConsoleWidth = 30; // Unknown OS fallbakc = 30
+                    cachedConsoleWidth = 46; // Unknown OS fallbakc = 46
             }
         } catch (IOException | NumberFormatException e) {
-            cachedConsoleWidth = 30; // Command failed or parsing error
+            cachedConsoleWidth = 46; // Command failed or parsing error
         }
 
         return cachedConsoleWidth;

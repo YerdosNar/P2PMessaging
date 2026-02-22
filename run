@@ -4,6 +4,11 @@ if [ "$1" == "-c" ]; then
     echo "Cleaning..."
     rm *.class
     rm -rf received_files
+elif [ "$1" == "-r" ]; then
+    echo "Compiling Rendezvous.java"
+    javac Rendezvous.java
+    echo "Executing Rendezvous on port: default=8888"
+    java Rendezvous
 else
     echo "Compiling..."
     javac *.java
