@@ -62,7 +62,7 @@ public class Crypto {
         byte[] ciphertext = encryptCipher.doFinal(plaintext);
 
         byte[] result = new byte[iv.length + ciphertext.length];
-        System.arraycopy(iv, 0, result, 0, iv.length);
+        System.arraycopy(iv,         0, result, 0,         iv.length);
         System.arraycopy(ciphertext, 0, result, iv.length, ciphertext.length);
 
         return result;
@@ -72,7 +72,7 @@ public class Crypto {
         byte[] iv         = new byte[12];
         byte[] ciphertext = new byte[cipherData.length - 12];
 
-        System.arraycopy(cipherData, 0, iv,         0, 12);
+        System.arraycopy(cipherData, 0,  iv,         0, 12);
         System.arraycopy(cipherData, 12, ciphertext, 0, ciphertext.length);
 
         decryptCipher.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(128, iv));
