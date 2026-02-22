@@ -1,3 +1,4 @@
+import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -22,7 +23,7 @@ public class Receive implements Runnable {
     private static final String DOWNLOAD_DIR = "received_files";
 
     public Receive(Socket socket, Crypto crypto, String localName) throws IOException {
-        this.dIn = new DataInputStream(socket.getInputStream());
+        this.dIn = new DataInputStream(new BufferedInputStream(socket.getInputStream(), 1 << 23)); // 8 MB buffer
         this.crypto = crypto;
         this.localName = localName;
         // Ensure download directory exists

@@ -17,6 +17,12 @@ public class Crypto {
     private PublicKey publicKey;
     private SecretKey aesKey;
 
+    // Reused across every encrypt/decrypt call — avoids repeated
+    // OS-entropy seeding (SecureRandom) and provider lookups (Cipher)
+    private final SecureRandom secureRandom = new SecureRandom();
+    private Cipher encryptCipher;
+    private Cipher decryptCipher;
+
     public Crypto() throws Exception {
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("DH");
         kpg.initialize(2048);
@@ -42,15 +48,18 @@ public class Crypto {
         MessageDigest sha = MessageDigest.getInstance("SHA-256");
         byte[] key = sha.digest(sharedSecret);
         aesKey = new SecretKeySpec(key, "AES");
+
+        // Instantiate Cipher objects once after the key is ready
+        encryptCipher = Cipher.getInstance("AES/GCM/NoPadding");
+        decryptCipher = Cipher.getInstance("AES/GCM/NoPadding");
     }
 
     public byte[] encrypt(byte[] plaintext) throws Exception {
-        byte[] iv = new byte[12];           // GCM IV size
-        new SecureRandom().nextBytes(iv);   // Use nonblocking /dev/urandom
+        byte[] iv = new byte[12]; // GCM IV size
+        secureRandom.nextBytes(iv);
 
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, aesKey, new GCMParameterSpec(128, iv));
-        byte[] ciphertext = cipher.doFinal(plaintext);
+        encryptCipher.init(Cipher.ENCRYPT_MODE, aesKey, new GCMParameterSpec(128, iv));
+        byte[] ciphertext = encryptCipher.doFinal(plaintext);
 
         byte[] result = new byte[iv.length + ciphertext.length];
         System.arraycopy(iv, 0, result, 0, iv.length);
@@ -60,15 +69,13 @@ public class Crypto {
     }
 
     public byte[] decrypt(byte[] cipherData) throws Exception {
-        byte[] iv = new byte[12]; // Extract first 12 bytes of IV
+        byte[] iv         = new byte[12];
         byte[] ciphertext = new byte[cipherData.length - 12];
 
-        System.arraycopy(cipherData, 0, iv, 0, 12);
+        System.arraycopy(cipherData, 0, iv,         0, 12);
         System.arraycopy(cipherData, 12, ciphertext, 0, ciphertext.length);
 
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(128, iv));
-
-        return cipher.doFinal(ciphertext);
+        decryptCipher.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(128, iv));
+        return decryptCipher.doFinal(ciphertext);
     }
 }

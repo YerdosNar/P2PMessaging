@@ -1,3 +1,4 @@
+import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,7 +24,7 @@ public class Send implements Runnable {
     private volatile boolean running = true;
 
     public Send(Socket socket, Crypto crypto, Scanner scanner) throws Exception {
-        this.dOut = new DataOutputStream(socket.getOutputStream());
+        this.dOut = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream(), 1 << 23)); // 8 MB buffer
         this.scanner = scanner;
         this.crypto = crypto;
 
@@ -99,7 +100,7 @@ public class Send implements Runnable {
         dOut.flush();
 
         // Stream file chunks
-        int chunkSize = 1024 * 1024; // 1MB
+        int chunkSize = 8 * 1024 * 1024; // 8 MB — fewer crypto round-trips, larger TCP segments
         byte[] buffer = new byte[chunkSize];
         long bytesSent = 0;
 
