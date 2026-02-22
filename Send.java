@@ -10,8 +10,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Scanner;
 
-import com.sun.tools.javap.SourceWriter;
-
 public class Send implements Runnable {
     public static final byte TYPE_TEXT   = 0x01;
     public static final byte TYPE_F_META = 0x02;
@@ -21,16 +19,16 @@ public class Send implements Runnable {
 
     private final DataOutputStream dOut;
     private final Scanner scanner;
-    private final Crypt crypto;
+    private final Crypto crypto;
     private volatile boolean running = true;
 
-    public Send(Socket socket, Crypto crypto, Scanner sc) throws Exception {
+    public Send(Socket socket, Crypto crypto, Scanner scanner) throws Exception {
         this.dOut = new DataOutputStream(socket.getOutputStream());
-        this.scanner = sc;
+        this.scanner = scanner;
         this.crypto = crypto;
 
         System.out.print("Your name: ");
-        this.name = scanner.nextLine();
+        this.name = scanner.nextLine().trim();
 
         // Send name to the other peer, before Thread starts
         // so Receive can reliably read it at the start of its `run()`
@@ -70,7 +68,7 @@ public class Send implements Runnable {
 
     private void sendText(String message) throws Exception {
         byte[] plaintext = message.getBytes("UTF-8");
-        byte[] ciphertext= crypto.encrypt(prependType(TYPE_TEXT, plaintext));
+        byte[] ciphertext = crypto.encrypt(prependType(TYPE_TEXT, plaintext));
 
         dOut.writeInt(ciphertext.length);
         dOut.write(ciphertext);
@@ -84,16 +82,16 @@ public class Send implements Runnable {
             return;
         }
 
-        long filesize = Files.size(path);
+        long fileSize = Files.size(path);
         String fname = path.getFileName().toString();
-        byte[] namebytes = fname.getBytes("UTF-8");
+        byte[] nameBytes = fname.getBytes("UTF-8");
 
         // Payload: [namelength(4B)][name][filesize]
         //          [   int        ][name][ long   ]
-        ByteBuffer payload = ByteBuffer.allocate(4 + namebytes.length + 8);
-        payload.putInt(namebytes.length);
-        payload.put(namebytes);
-        payload.putLong(filesize);
+        ByteBuffer payload = ByteBuffer.allocate(4 + nameBytes.length + 8);
+        payload.putInt(nameBytes.length);
+        payload.put(nameBytes);
+        payload.putLong(fileSize);
 
         byte[] ciphertext = crypto.encrypt(prependType(TYPE_F_META, payload.array()));
         dOut.writeInt(ciphertext.length);
@@ -101,31 +99,32 @@ public class Send implements Runnable {
         dOut.flush();
 
         // Stream file chunks
-        int chunksize = 1024 * 1024; // 1MB
-        byte[] buffer = new byte[chunksize];
+        int chunkSize = 1024 * 1024; // 1MB
+        byte[] buffer = new byte[chunkSize];
         long bytesSent = 0;
 
         System.out.println("Uploading '" + fname + "'...");
 
         Instant start = Instant.now();
-        try (InputStream is = Files.newInputStream(path)) {
+        try (InputStream fis = Files.newInputStream(path)) {
             int read;
-            while ((read = is.read(buffer)) > 0) {
-                byte[] chnkPayload;
-                if (read == chnkSize) {
-                    chnkPayload = buffer;
+            while ((read = fis.read(buffer)) > 0) {
+                // Encrypt only read bytes
+                byte[] chunkPayload;
+                if (read == chunkSize) {
+                    chunkPayload = buffer;
                 }
                 else {
-                    chnkPayload = new byte[read];
-                    System.arraycopy(buffer, 0, chnkPayload, 0, read);
+                    chunkPayload = new byte[read];
+                    System.arraycopy(buffer, 0, chunkPayload, 0, read);
                 }
 
-                byte[] chnkCipher = crypto.encrypt(prependType(TYPE_F_CHNK, chnkPayload));
-                dOut.writeInt(chnkCipher.length);
-                dOut.write(chnkCipher);
+                byte[] chunkCipher = crypto.encrypt(prependType(TYPE_F_CHNK, chunkPayload));
+                dOut.writeInt(chunkCipher.length);
+                dOut.write(chunkCipher);
 
                 bytesSent += read;
-                Utils.printProgressBar(bytesSend, filesize);
+                Utils.printProgressBar(bytesSent, fileSize);
             }
         }
         Instant end = Instant.now();

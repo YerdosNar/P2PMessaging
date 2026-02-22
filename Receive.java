@@ -18,15 +18,14 @@ public class Receive implements Runnable {
     private long expectedFileSize;
     private long currentFileBytesReceived;
 
-    // Directory where received files are saved;
+    // Directory where received files are saved
     private static final String DOWNLOAD_DIR = "received_files";
 
     public Receive(Socket socket, Crypto crypto, String localName) throws IOException {
         this.dIn = new DataInputStream(socket.getInputStream());
         this.crypto = crypto;
         this.localName = localName;
-
-        // Ensure download dir exists
+        // Ensure download directory exists
         Files.createDirectories(Paths.get(DOWNLOAD_DIR));
     }
 
@@ -46,7 +45,7 @@ public class Receive implements Runnable {
             dIn.readFully(encrypted);
 
             plaintext = crypto.decrypt(encrypted);
-            // First byte = TYPE_TEXT
+            // First byte = TYPE_TEXT 0x01
             payload = new byte[plaintext.length - 1];
             System.arraycopy(plaintext, 1, payload, 0, payload.length);
 
@@ -70,19 +69,17 @@ public class Receive implements Runnable {
                 payload = new byte[plaintext.length - 1];
                 System.arraycopy(plaintext, 1, payload, 0, payload.length);
 
-                switch (type) {
-                    case Send.TYPE_TEXT:
-                        handleText(payload);
-                        break;
-                    case Send.TYPE_F_META:
-                        handleFileMeta(payload);
-                        break;
-                    case Send.TYPE_F_CHNK:
-                        handleFileChnk(payload);
-                        break;
-                    default:
-                        System.err.println("[Unknown TYPE: "+type+"]");
-                        break;
+                if (type == Send.TYPE_TEXT) {
+                    handleText(payload);
+                }
+                else if (type == Send.TYPE_F_META) {
+                    handleFileMeta(payload);
+                }
+                else if (type == Send.TYPE_F_CHNK) {
+                    handleFileChunk(payload);
+                }
+                else {
+                    System.err.println("[Unknown TYPE: "+type+"]");
                 }
             }
         }
@@ -97,16 +94,16 @@ public class Receive implements Runnable {
     private void handleText(byte[] payload) throws Exception {
         String message = new String(payload, "UTF-8");
         System.out.println("\r" + peerName + ": " + message);
-        System.out.println(localName + ": ");
+        System.out.print(localName + ": ");
     }
 
     private void handleFileMeta(byte[] payload) throws Exception {
         ByteBuffer buffer = ByteBuffer.wrap(payload);
 
         int nameLength = buffer.getInt();
-        byte[] nameByte = new byte[nameLength];
-        buffer.get(nameByte);
-        String currentFileName = new String(nameByte, "UTF-8");
+        byte[] nameBytes = new byte[nameLength];
+        buffer.get(nameBytes);
+        String currentFileName = new String(nameBytes, "UTF-8");
 
         expectedFileSize = buffer.getLong();
         currentFileBytesReceived = 0;
@@ -115,10 +112,11 @@ public class Receive implements Runnable {
         Path savePath = resolveUnique(Paths.get(DOWNLOAD_DIR, safeName));
 
         fOut = Files.newOutputStream(savePath);
+
         System.out.print("\r[Receiving file: " + safeName + " (" + expectedFileSize + " B)]");
     }
 
-    private void handleFileChnk(byte[] payload) throws Exception {
+    private void handleFileChunk(byte[] payload) throws Exception {
         if (fOut == null) return;
 
         fOut.write(payload);

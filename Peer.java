@@ -11,21 +11,21 @@ import java.util.Scanner;
 public class Peer {
     private Socket socket;
     private Crypto crypto;
-    private Send   sender;
+    private Send sender;
     private Receive receiver;
     private final Scanner sc = new Scanner(System.in);
 
-    public void punch(String vpsIp, int vpsPort, int listentPort) throws Exception {
+    public void punch(String vpsIp, int vpsPort, int listenPort) throws Exception {
         System.out.println("Connecting to rendezvous server...");
         Socket vps = new Socket(vpsIp, vpsPort);
 
         DataInputStream in = new DataInputStream(vps.getInputStream());
         DataOutputStream out = new DataOutputStream(vps.getOutputStream());
 
-        out.writeInt(listentPort);
+        out.writeInt(listenPort);
         out.flush();
 
-        System.out.println("Waiting for peer to join");
+        System.out.println("Waiting for peer to join...");
 
         String role = in.readUTF();
         System.out.println("Role assigned: " + role);
@@ -50,7 +50,7 @@ public class Peer {
             int peerPort = in.readInt();
             vps.close();
 
-            System.out.println("Connecting to peer " + peerIp + ":" + peerPort);
+            System.out.println("Connecting to peer at " + peerIp + ":" + peerPort);
 
             int attempts = 0;
             while (attempts < 10) {
@@ -65,7 +65,7 @@ public class Peer {
             }
 
             if (socket == null) {
-                throw new IOException("Failed to connect to peer...");
+                throw new IOException("Failed to connect to peer");
             }
             System.out.println("Connected to peer!");
 
@@ -312,8 +312,9 @@ public class Peer {
                 int vpsPort = vpsPortStr.isEmpty() ? 8888 : Integer.parseInt(vpsPortStr);
 
                 System.out.print("Port forwarded? Enter port (or 0 for HOLE PUNCH/RELAY): ");
-                String listnePortStr = peer.sc.nextLine();
-                int listenPort = listnePortStr.isEmpty() ? 0 : Integer.parseInt(listnePortStr);
+                String listenPortStr = peer.sc.nextLine();
+                int listenPort = listenPortStr.isEmpty() ? 0 : Integer.parseInt(listenPortStr);
+
                 peer.punch(vpsIp, vpsPort, listenPort);
             }
             else {
