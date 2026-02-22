@@ -16,8 +16,9 @@ public class Peer {
     private final Scanner sc = new Scanner(System.in);
 
     public void punch(String vpsIp, int vpsPort, int listenPort) throws Exception {
-        System.out.println("Connecting to rendezvous server...");
+        LogUtils.info("Connecting to rendezvous server...");
         Socket vps = new Socket(vpsIp, vpsPort);
+        LogUtils.success("Connected to " + vpsIp + ":" + vpsPort + "\n");
 
         DataInputStream in = new DataInputStream(vps.getInputStream());
         DataOutputStream out = new DataOutputStream(vps.getOutputStream());
@@ -25,22 +26,22 @@ public class Peer {
         out.writeInt(listenPort);
         out.flush();
 
-        System.out.println("Waiting for peer to join...");
+        LogUtils.info("Waiting for peer to join...");
 
         String role = in.readUTF();
-        System.out.println("Role assigned: " + role);
+        LogUtils.info("Role assigned: \033[1m" + role + "\033[0m");
 
         if (role.equals("LISTEN")) {
             int port = in.readInt();
             String peerIp = in.readUTF();
             vps.close();
 
-            System.out.println("Waiting for peer (" + peerIp + ") to connect on port " + port);
+            LogUtils.info("Waiting for peer (\033[1;36m" + peerIp + "\033[0m) to connect on port " + port);
             ServerSocket ss = new ServerSocket(port);
             ss.setReuseAddress(true);
             socket = ss.accept();
             ss.close();
-            System.out.println("Peer connected!");
+            LogUtils.success("Peer connected!");
 
             doKeyExchange();
             startChat();
@@ -50,7 +51,7 @@ public class Peer {
             int peerPort = in.readInt();
             vps.close();
 
-            System.out.println("Connecting to peer at " + peerIp + ":" + peerPort);
+            LogUtils.info("Connecting to peer at \033[1;36m" + peerIp + ":" + peerPort + "\033[0m");
 
             int attempts = 0;
             while (attempts < 10) {
@@ -59,15 +60,16 @@ public class Peer {
                     break;
                 }
                 catch (IOException ioe) {
-                    System.out.println("Attempt " + (++attempts) + " failed, retrying...");
+                    LogUtils.warn("Attempt " + (++attempts) + " failed, retrying...");
                     Thread.sleep(1000);
                 }
             }
 
             if (socket == null) {
+                System.out.print("\033[31m[x]\033[0m ");
                 throw new IOException("Failed to connect to peer");
             }
-            System.out.println("Connected to peer!");
+            LogUtils.success("Connected to peer!");
 
             doKeyExchange();
             startChat();
@@ -92,29 +94,30 @@ public class Peer {
             int myLocalPort = vps.getLocalPort(); // local port NAT mapped to myExtPort
             vps.close();
 
-            System.out.println("Hole punching to " + peerIp + ":" + peerExtPort);
-            System.out.println("Binding local port " + myLocalPort
-                + " (mapped externally to " + myExtPort + ")");
+            LogUtils.info("Hole punching to \033[1;36m" + peerIp + ":" + peerExtPort + "\033[0m");
+            LogUtils.info("Binding local port \033[1;36m" + myLocalPort
+                + "\033[0m (mapped externally to \033[1;36m" + myExtPort + "\033[0m)");
 
             socket = holePunch(peerIp, peerExtPort, myLocalPort);
 
             if (socket != null) {
-                System.out.println("Hole punch succeeded!");
+                LogUtils.success("Hole punch succeeded!");
                 doKeyExchange();
                 startChat();
             } else {
-                System.out.println("Hole punch failed (likely symmetric NAT).");
-                System.out.println("Please restart and enter 0 for both peers to use RELAY mode.");
+                LogUtils.warn("Hole punch failed (likely symmetric NAT).");
+                LogUtils.warn("Please restart and enter 0 for both peers to use RELAY mode.");
             }
         } else if (role.equals("RELAY")) {
-            System.out.println("Using relay mode (same LAN or symmetric NAT detected).");
-            System.out.println("Traffic is still end-to-end encrypted — VPS sees only ciphertext.");
+            LogUtils.info("Using relay mode (same LAN or symmetric NAT detected).");
+            LogUtils.info("Traffic is still end-to-end encrypted — VPS sees only ciphertext.");
             socket = vps;
             doKeyExchange();
             startChat();
         }
         else {
             vps.close();
+            System.out.print("\033[31m[x]\033[0m ");
             throw new IOException("Unknown role: " + role);
         }
     }
@@ -179,8 +182,8 @@ public class Peer {
                     return;
                 }
                 catch (IOException e) {
-                    System.out.println("Punch attempt " + attempt + "/15 failed, retrying...");
-                    try { Thread.sleep(1000); } catch (InterruptedException ie) { return; }
+                    LogUtils.info("Punch attempt " + attempt + "/15 failed, retrying...");
+                    try { Thread.sleep(1000); } catch (InterruptedException ie) {return;}
                 }
             }
         });
@@ -203,25 +206,25 @@ public class Peer {
     }
 
     public void connect(String ip, int port) throws Exception {
-        System.out.println("Connecting to " + ip + ":" + port);
+        LogUtils.info("Connecting to \033[1;36m" + ip + ":" + port + "\033[0m");
         socket = new Socket(ip, port);
-        System.out.println("Connected!");
+        LogUtils.success("Connected!");
         doKeyExchange();
         startChat();
     }
 
     public void listen(int port) throws Exception {
         ServerSocket server = new ServerSocket(port);
-        System.out.println("Listening on port: " + port + "...");
+        LogUtils.info("Listening on port: " + port + "...");
         socket = server.accept();
-        System.out.println("Peer connected from " + socket.getInetAddress());
+        LogUtils.success("Peer connected from \033[1;36m" + socket.getInetAddress() + ":" + socket.getPort() + "\033[m");
         server.close();
         doKeyExchange();
         startChat();
     }
 
     private void doKeyExchange() throws Exception {
-        System.out.println("Performing key exchange...");
+        LogUtils.info("Performing key exchange...");
         crypto = new Crypto();
 
         DataInputStream in = new DataInputStream(socket.getInputStream());
@@ -237,7 +240,7 @@ public class Peer {
         in.readFully(peerPubKey);
 
         crypto.computeSharedSecret(peerPubKey);
-        System.out.println("Encryption established!");
+        LogUtils.success("Encryption established!");
     }
 
     private void startChat() throws Exception {
@@ -257,12 +260,12 @@ public class Peer {
             sendThread.join();
         }
         catch (InterruptedException e) {
-            System.err.println(e.getMessage());
+            LogUtils.error(e.getMessage());
         }
 
         receiver.stop();
         socket.close();
-        System.out.println("Disconnected...");
+        LogUtils.info("Disconnected...");
     }
 
     public static void main(String[] args) {
@@ -306,7 +309,7 @@ public class Peer {
                         vpsIp = inetAddress.getHostAddress();
                     }
                     catch (UnknownHostException e) {
-                        System.err.println("Failed to resolve IP for domain: " + domName);
+                        LogUtils.error("Failed to resolve IP for domain: " + domName);
                         e.printStackTrace();
                     }
                 }
@@ -322,7 +325,7 @@ public class Peer {
             }
         }
         catch (Exception e) {
-            System.err.println("ERROR: " + e.getMessage());
+            LogUtils.error("ERROR: " + e.getMessage());
             e.printStackTrace();
         }
 

@@ -9,6 +9,11 @@ elif [ "$1" == "-r" ]; then
     javac Rendezvous.java
     echo "Executing Rendezvous on port: default=8888"
     java Rendezvous
+elif [ "$1" == "-p" ]; then
+    echo "Compiling Peer.java"
+    javac Peer.java
+    echo "Executing Peer..."
+    java Peer
 else
     echo "Compiling..."
     javac *.java

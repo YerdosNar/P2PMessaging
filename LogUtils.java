@@ -3,7 +3,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
-public class Utils {
+public class LogUtils {
     private static int cachedConsoleWidth = -1;
 
     private static OS getOS() {
@@ -90,5 +90,21 @@ public class Utils {
         }
         bar.append("] ").append(percent).append("%");
         System.out.print(bar.toString());
+    }
+
+    public static void info(String message) {
+        System.out.println("\033[34m[i]\033[0m " + message);
+    }
+
+    public static void warn(String message) {
+        System.out.println("\033[33m[!]\033[0m " + message);
+    }
+
+    public static void success(String message) {
+        System.out.println("\033[32m[✓]\033[0m " + message);
+    }
+
+    public static void error(String message) {
+        System.err.println("\033[31m[x]\033[0m " + message);
     }
 }

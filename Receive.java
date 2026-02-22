@@ -50,11 +50,11 @@ public class Receive implements Runnable {
             System.arraycopy(plaintext, 1, payload, 0, payload.length);
 
             peerName = new String(payload, "UTF-8");
-            System.out.println("[" + peerName + " joined the chat]");
+            LogUtils.info("[" + peerName + " joined the chat]");
             System.out.print(localName + ": ");
         }
         catch (Exception e) {
-            System.err.println("Failed to read Peer's name: "+ e.getMessage());
+            LogUtils.error("Failed to read Peer's name: "+ e.getMessage());
         }
 
         try {
@@ -79,7 +79,7 @@ public class Receive implements Runnable {
                     handleFileChunk(payload);
                 }
                 else {
-                    System.err.println("[Unknown TYPE: "+type+"]");
+                    LogUtils.error("[Unknown TYPE: "+type+"]");
                 }
             }
         }
@@ -134,12 +134,12 @@ public class Receive implements Runnable {
         fOut.write(payload);
         currentFileBytesReceived += payload.length;
 
-        Utils.printProgressBar(currentFileBytesReceived, expectedFileSize);
+        LogUtils.printProgressBar(currentFileBytesReceived, expectedFileSize);
 
         if (currentFileBytesReceived >= expectedFileSize) {
             fOut.close();
             fOut = null;
-            System.out.println("\n[File received fully]");
+            LogUtils.info("\n[File received fully]");
             System.out.print(localName + ": ");
         }
     }
