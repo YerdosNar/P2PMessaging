@@ -19,16 +19,16 @@ public class Rendezvous {
         System.out.println("Rendezvous server listening on port: " + port);
         System.out.println("Modes: PORT-FORWARD, HOLE-PUNCH, or RELAY");
 
-        while(true) {
+        while (true) {
             System.out.println("\nWaiting for two peers...");
 
             // Accept first
             Socket peer1 = ss.accept();
             String addr1 = peer1.getInetAddress().getHostAddress();
-            int natPort1 = peer1.getPort();
+            int natPort1 = peer1.getPort(); // The port the NAT assigned for this connection
             System.out.println("Peer 1 connected: " + addr1 + ":" + natPort1);
 
-            // Accept second peers
+            // Accept second peer
             Socket peer2 = ss.accept();
             String addr2 = peer2.getInetAddress().getHostAddress();
             int natPort2 = peer2.getPort();
@@ -58,7 +58,7 @@ public class Rendezvous {
 
                 // peer2
                 out2.writeUTF("CONNECT");
-                out2.writeInt(listenPort2);
+                out2.writeInt(listenPort1);
                 out2.writeUTF(addr1);
                 out2.flush();
 
@@ -69,8 +69,8 @@ public class Rendezvous {
             else if (pf2) {
                 // peer1
                 out1.writeUTF("CONNECT");
-                out1.writeInt(listenPort1);
                 out1.writeUTF(addr2);
+                out1.writeInt(listenPort2);
                 out1.flush();
 
                 // peer2
@@ -93,14 +93,14 @@ public class Rendezvous {
                 // Crucially, we flush both at the time so both peers start
                 // their simultaneous SYN exchange at roughly the same moment
                 out1.writeUTF("PUNCH");
-                out1.writeUTF(addr2);       // peer2 exteral IP
-                out1.writeInt(natPort2);    // peer2 external port (true NAT mapping)
-                out1.writeInt(natPort1);    // peer1's OWN external port
+                out1.writeUTF(addr2);      // peer2 external IP
+                out1.writeInt(natPort2);   // peer2 external port (true NAT mapping)
+                out1.writeInt(natPort1);   // peer1's OWN external port
 
                 out2.writeUTF("PUNCH");
-                out2.writeUTF(addr1);
-                out2.writeInt(natPort1);
-                out2.writeInt(natPort2);
+                out2.writeUTF(addr1);      // peer1 external IP
+                out2.writeInt(natPort1);   // peer1 external port (true NAT mapping)
+                out2.writeInt(natPort2);   // peer2's OWN external port
 
                 // Flush both simultaneously - timing matters for hole punching
                 out1.flush();
@@ -123,7 +123,7 @@ public class Rendezvous {
                 out2.writeUTF("RELAY");
                 out2.flush();
 
-                System.out.println("Mode: RELAY (same IP or symmatric NAT)");
+                System.out.println("Mode: RELAY (same public IP or symmetric NAT)");
 
                 // Start relay threads
                 Thread t1 = new Thread(() -> relay(peer1, peer2, "Peer1->Peer2"));
@@ -137,7 +137,7 @@ public class Rendezvous {
     private static void relay(Socket from, Socket to, String name) {
         try {
             InputStream in = from.getInputStream();
-            OutputStream out = to .getOutputStream();
+            OutputStream out = to.getOutputStream();
             byte[] buffer = new byte[8192]; // 8 * 1024
             int n;
             while ((n = in.read(buffer)) > 0) {
