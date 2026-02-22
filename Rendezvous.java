@@ -26,13 +26,15 @@ public class Rendezvous {
             Socket peer1 = ss.accept();
             String addr1 = peer1.getInetAddress().getHostAddress();
             int natPort1 = peer1.getPort(); // The port the NAT assigned for this connection
-            LogUtils.success("Peer 1 connected: " + addr1 + ":" + natPort1);
+            LogUtils.success("Peer 1 connected: \033[1;36m" + addr1
+                + "\033[0m:\033[1;35m" + natPort1 + "\033[0m");
 
             // Accept second peer
             Socket peer2 = ss.accept();
             String addr2 = peer2.getInetAddress().getHostAddress();
             int natPort2 = peer2.getPort();
-            LogUtils.success("Peer 2 connected: " + addr2 + ":" + natPort2);
+            LogUtils.success("Peer 2 connected: \033[1;36m" + addr2
+                + "\033[0m:\033[1;35m" + natPort2 + "\033[0m");
 
             DataInputStream in1 = new DataInputStream(peer1.getInputStream());
             DataInputStream in2 = new DataInputStream(peer2.getInputStream());
@@ -46,8 +48,8 @@ public class Rendezvous {
             boolean pf1 = listenPort1 >= 1024 && listenPort1 <= 65535;
             boolean pf2 = listenPort2 >= 1024 && listenPort2 <= 65535;
 
-            LogUtils.info("Peer 1: forwarded=" + (pf1 ? listenPort1 : "none") + " nat_port=" + natPort1);
-            LogUtils.info("Peer 2: forwarded=" + (pf2 ? listenPort2 : "none") + " nat_port=" + natPort2);
+            LogUtils.info("Peer 1: forwarded=\033[1;36m" + (pf1 ? listenPort1 : "\033[0mnone") + "\033[0m nat_port=\033[1;35m" + natPort1 + "\033[0m");
+            LogUtils.info("Peer 2: forwarded=\033[1;36m" + (pf2 ? listenPort2 : "\033[0mnone") + "\033[0m nat_port=\033[1;35m" + natPort2 + "\033[0m");
 
             if (pf1) {
                 // peer1
@@ -62,7 +64,7 @@ public class Rendezvous {
                 out2.writeUTF(addr1);
                 out2.flush();
 
-                LogUtils.info("Mode: PORT-FORWARD (Peer2 -> Peer1:" + listenPort1 + ")");
+                LogUtils.info("Mode: PORT-FORWARD (Peer2 -> Peer1:\033[1;35m" + listenPort1 + "\033[0m)");
                 peer1.close();
                 peer2.close();
             }
@@ -79,7 +81,7 @@ public class Rendezvous {
                 out2.writeUTF(addr1);
                 out2.flush();
 
-                LogUtils.info("Mode: PORT-FORWARD (Peer1 -> Peer2:" + listenPort2 + ")");
+                LogUtils.info("Mode: PORT-FORWARD (Peer1 -> Peer2:\033[1;35m" + listenPort2 + "\033[0m)");
                 peer1.close();
                 peer2.close();
             }
@@ -106,10 +108,10 @@ public class Rendezvous {
                 out1.flush();
                 out2.flush();
 
-                LogUtils.info("Mode: HOLE-PUNCH ("
-                    + addr1 + ":" + natPort1
-                    + " <-> "
-                    + addr2 + ":" + natPort2 + ")");
+                LogUtils.info("Mode: HOLE-PUNCH (\033[1;36m"
+                    + addr1 + "\033[0m:\033[1;35m" + natPort1
+                    + "\033[0m <-> \033[1;36m"
+                    + addr2 + "\033[0m:\033[1;35m" + natPort2 + "\033[0m)");
 
                 // close Rendezvous connections - peers are alone now
                 peer1.close();

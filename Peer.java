@@ -18,7 +18,7 @@ public class Peer {
     public void punch(String vpsIp, int vpsPort, int listenPort) throws Exception {
         LogUtils.info("Connecting to rendezvous server...");
         Socket vps = new Socket(vpsIp, vpsPort);
-        LogUtils.success("Connected to " + vpsIp + ":" + vpsPort + "\n");
+        LogUtils.success("Connected to \033[1;36m" + vpsIp + "\033[0m:\033[1;35m" + vpsPort + "\033[0m\n");
 
         DataInputStream in = new DataInputStream(vps.getInputStream());
         DataOutputStream out = new DataOutputStream(vps.getOutputStream());
@@ -36,7 +36,7 @@ public class Peer {
             String peerIp = in.readUTF();
             vps.close();
 
-            LogUtils.info("Waiting for peer (\033[1;36m" + peerIp + "\033[0m) to connect on port " + port);
+            LogUtils.info("Waiting for peer (\033[1;36m" + peerIp + "\033[0m) to connect on port \033[1;35m" + port + "\033[0m");
             ServerSocket ss = new ServerSocket(port);
             ss.setReuseAddress(true);
             socket = ss.accept();
@@ -51,7 +51,8 @@ public class Peer {
             int peerPort = in.readInt();
             vps.close();
 
-            LogUtils.info("Connecting to peer at \033[1;36m" + peerIp + ":" + peerPort + "\033[0m");
+            LogUtils.info("Connecting to peer at \033[1;36m" + peerIp
+                + "\033[0m:\033[1;35m" + peerPort + "\033[0m");
 
             int attempts = 0;
             while (attempts < 10) {
@@ -60,7 +61,7 @@ public class Peer {
                     break;
                 }
                 catch (IOException ioe) {
-                    LogUtils.warn("Attempt " + (++attempts) + " failed, retrying...");
+                    LogUtils.warn("Attempt \033[1;33m" + (++attempts) + "\033[0m failed, retrying...");
                     Thread.sleep(1000);
                 }
             }
@@ -94,9 +95,10 @@ public class Peer {
             int myLocalPort = vps.getLocalPort(); // local port NAT mapped to myExtPort
             vps.close();
 
-            LogUtils.info("Hole punching to \033[1;36m" + peerIp + ":" + peerExtPort + "\033[0m");
+            LogUtils.info("Hole punching to \033[1;36m" + peerIp
+                + "\033[0m:\033[1;35m" + peerExtPort + "\033[0m");
             LogUtils.info("Binding local port \033[1;36m" + myLocalPort
-                + "\033[0m (mapped externally to \033[1;36m" + myExtPort + "\033[0m)");
+                + "\033[0m (mapped externally to \033[1;35m" + myExtPort + "\033[0m)");
 
             socket = holePunch(peerIp, peerExtPort, myLocalPort);
 
@@ -182,7 +184,7 @@ public class Peer {
                     return;
                 }
                 catch (IOException e) {
-                    LogUtils.info("Punch attempt " + attempt + "/15 failed, retrying...");
+                    LogUtils.info("Punch attempt \033[1;33m" + attempt + "\033[0m/15 failed, retrying...");
                     try { Thread.sleep(1000); } catch (InterruptedException ie) {return;}
                 }
             }
@@ -206,7 +208,8 @@ public class Peer {
     }
 
     public void connect(String ip, int port) throws Exception {
-        LogUtils.info("Connecting to \033[1;36m" + ip + ":" + port + "\033[0m");
+        LogUtils.info("Connecting to \033[1;36m" + ip
+            + "\033[0m:\033[35m" + port + "\033[0m");
         socket = new Socket(ip, port);
         LogUtils.success("Connected!");
         doKeyExchange();
@@ -215,9 +218,10 @@ public class Peer {
 
     public void listen(int port) throws Exception {
         ServerSocket server = new ServerSocket(port);
-        LogUtils.info("Listening on port: " + port + "...");
+        LogUtils.info("Listening on port: \033[1;36m" + port + "\033[0m...");
         socket = server.accept();
-        LogUtils.success("Peer connected from \033[1;36m" + socket.getInetAddress() + ":" + socket.getPort() + "\033[m");
+        LogUtils.success("Peer connected from \033[1;36m" + socket.getInetAddress()
+            + "\033[0m:\033[1;35m" + socket.getPort() + "\033[m");
         server.close();
         doKeyExchange();
         startChat();
