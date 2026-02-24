@@ -46,6 +46,7 @@ public class Rendezvous {
         ServerSocket ss = new ServerSocket(port);
         LogUtils.info("Rendezvous server listening on port: " + port);
         LogUtils.info("Modes: PORT-FORWARD, HOLE-PUNCH, or RELAY");
+        System.out.println("\n===========================================");
 
         while (true) {
             Socket peer = ss.accept();
@@ -249,6 +250,7 @@ public class Rendezvous {
             t1.start();
             t2.start();
         }
+        System.out.println("===========================================\n");
     }
 
     private static void relay(Socket from, Socket to, String name) {
