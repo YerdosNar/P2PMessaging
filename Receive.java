@@ -164,11 +164,11 @@ public class Receive implements Runnable {
             fOut = null;
 
             byte[] correctHash = fileDigest.digest();
+            System.out.println();
             if (Arrays.equals(correctHash, expectedHash)) {
                 LogUtils.success("[Checksum \033[1;32mVERIFIED\033[0m. File not corrupted]");
             }
             else {
-                System.out.println();
                 LogUtils.warn("[\033[1;33mWARNING\033[0m: Checksum MISMATCH! File may be corrupted]");
                 System.out.println("    Expected: " + toHex(expectedHash));
                 System.out.println("    Correct : " + toHex(correctHash));
