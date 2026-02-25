@@ -1,4 +1,3 @@
-import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,10 +12,13 @@ import java.time.Instant;
 import java.util.Scanner;
 
 public class Send implements Runnable {
-    public static final byte TYPE_TEXT   = 0x01;
-    public static final byte TYPE_F_META = 0x02;
-    public static final byte TYPE_F_CHNK = 0x03;
-    public static final byte TYPE_F_HASH = 0x04;
+    // Message type constants
+    public static final byte TYPE_TEXT      = 0x01;
+    public static final byte TYPE_FILE_META = 0x02;
+    public static final byte TYPE_FILE_CHNK = 0x03;
+    // No longer used — hash is now embedded in TYPE_FILE_META
+    // kept here so Receive.java doesn't need changing if old peers connect
+    public static final byte TYPE_FILE_HASH = 0x04;
 
     public final String name;
 
@@ -26,23 +28,23 @@ public class Send implements Runnable {
     private volatile boolean running = true;
 
     public Send(Socket socket, Crypto crypto, Scanner scanner) throws Exception {
-        this.dOut = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream(), 1 << 23)); // 8 MB buffer
+        this.dOut = new DataOutputStream(socket.getOutputStream());
         this.scanner = scanner;
         this.crypto = crypto;
 
         System.out.print("Your name: ");
         this.name = scanner.nextLine().trim();
 
-        // Send name to the other peer, before Thread starts
-        // so Receive can reliably read it at the start of its `run()`
-        LogUtils.info("Sending name '" + this.name + "' to the peer...");
+        // Send our name to the peer immediately, before threads start,
+        // so Receive can reliably read it at the start of its run().
+        System.out.println("Sending your name to the peer...");
         sendText(name);
     }
 
     @Override
     public void run() {
-        while (running) {
-            try {
+        try {
+            while (running) {
                 System.out.print(name + ": ");
                 String message = scanner.nextLine();
 
@@ -60,13 +62,10 @@ public class Send implements Runnable {
 
                 sendText(message);
             }
-            catch (IOException e) {
-                if (running) System.err.println("Send error: " + e.getMessage());
-                running = false;
-            }
-            catch (Exception e) {
-                if (running) System.err.println("Encrypt error: " + e.getMessage());
-            }
+        } catch (IOException e) {
+            if (running) System.err.println("Send error: " + e.getMessage());
+        } catch (Exception e) {
+            if (running) System.err.println("Encrypt error: " + e.getMessage());
         }
     }
 
@@ -80,9 +79,11 @@ public class Send implements Runnable {
     }
 
     private void sendFile(String filename) throws Exception {
+        Instant start = Instant.now();
         Path path = Paths.get(filename);
+
         if (!Files.exists(path)) {
-            LogUtils.error("File not found: " + filename);
+            System.err.println("File not found: " + filename);
             return;
         }
 
@@ -90,35 +91,37 @@ public class Send implements Runnable {
         String fname = path.getFileName().toString();
         byte[] nameBytes = fname.getBytes("UTF-8");
 
-        LogUtils.info("Computing checksum...");
+        // Compute SHA-256 of the entire file before sending.
+        // We do this upfront so the receiver can verify as chunks arrive
+        // rather than needing a separate follow-up message.
+        System.out.println("Computing checksum...");
         byte[] sha256 = computeSha256(path);
-        // Payload: [namelength(4B)][name][filesize][sha256]
-        //          [   int        ][name][ long   ][32]
+
+        // META payload: [nameLength (4)][nameBytes][fileSize (8)][sha256 (32)]
         ByteBuffer payload = ByteBuffer.allocate(4 + nameBytes.length + 8 + 32);
         payload.putInt(nameBytes.length);
         payload.put(nameBytes);
         payload.putLong(fileSize);
         payload.put(sha256);  // always exactly 32 bytes
 
-        byte[] ciphertext = crypto.encrypt(prependType(TYPE_F_META, payload.array()));
+        byte[] ciphertext = crypto.encrypt(prependType(TYPE_FILE_META, payload.array()));
         dOut.writeInt(ciphertext.length);
         dOut.write(ciphertext);
         dOut.flush();
 
         // Stream file chunks
-        int chunkSize = 8 * 1024 * 1024; // 8 MB — fewer crypto round-trips, larger TCP segments
+        int chunkSize = 1024 * 1024; // 1MB
         byte[] buffer = new byte[chunkSize];
         long bytesSent = 0;
 
-        LogUtils.info("Uploading \033[1;36m" + fname + "\033[0m...");
+        System.out.println("Uploading " + fname + "...");
 
-        Instant start = Instant.now();
         try (InputStream fis = Files.newInputStream(path)) {
             int read;
-            while ((read = fis.read(buffer)) > 0) {
+            while((read = fis.read(buffer)) > 0) {
                 // Encrypt only read bytes
                 byte[] chunkPayload;
-                if (read == chunkSize) {
+                if(read == chunkSize) {
                     chunkPayload = buffer;
                 }
                 else {
@@ -126,45 +129,34 @@ public class Send implements Runnable {
                     System.arraycopy(buffer, 0, chunkPayload, 0, read);
                 }
 
-                byte[] chunkCipher = crypto.encrypt(prependType(TYPE_F_CHNK, chunkPayload));
+                byte[] chunkCipher = crypto.encrypt(prependType(TYPE_FILE_CHNK, chunkPayload));
                 dOut.writeInt(chunkCipher.length);
                 dOut.write(chunkCipher);
 
                 bytesSent += read;
-                LogUtils.printProgressBar(bytesSent, fileSize);
+                Utils.printProgressBar(bytesSent, fileSize);
             }
         }
         Instant end = Instant.now();
-        long execTime = Duration.between(start, end).toMillis();
+        long executionTime = Duration.between(start, end).toMillis();
 
         dOut.flush();
-        System.out.println();
-        if (fileSize >= 1024) {
-            double fileSizeKB = fileSize * 1.0 / 1024.0;
-            if (fileSizeKB >= 1024) {
-                LogUtils.success(String.format("[Sent file: " + fname + " (%.2f MB)]", (fileSizeKB / 1024.0)));
+        System.out.println("\n[Sent file: " + fname + " (" + fileSize + " bytes)]");
+        if(executionTime / 1000 >= 10) {
+            double execTimeDouble = executionTime / 1000.0;
+            if(execTimeDouble / 60 == 1) {
+                System.out.printf("Time: %dm %.2fs\n", (int)(execTimeDouble/60), execTimeDouble % 60);
             }
             else {
-                LogUtils.success(String.format("[Sent file: " + fname + " (%.2f KB)]", fileSizeKB));
+                System.out.printf("Time: %.2f s\n", execTimeDouble);
             }
         }
         else {
-            LogUtils.success("[Sent file: " + fname + " (" + fileSize + " B)]");
-        }
-        if (execTime >= 10000) {
-            double execTimeSeconds = execTime / 1000.0;
-            if (execTimeSeconds >= 60.0) {
-                System.out.printf("Time: %dm %.2fs\n", (int)(execTimeSeconds/60), execTimeSeconds%60);
-            }
-            else {
-                System.out.printf("Time: %.2fs\n", execTimeSeconds);
-            }
-        }
-        else {
-            System.out.println("Time: " + execTime + " ms");
+            System.out.println("Time: " + executionTime + " ms");
         }
     }
 
+    /** Returns the SHA-256 digest of the file at the given path (always 32 bytes). */
     private byte[] computeSha256(Path path) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream is = Files.newInputStream(path)) {
@@ -174,7 +166,6 @@ public class Send implements Runnable {
                 digest.update(buf, 0, read);
             }
         }
-
         return digest.digest();
     }
 
@@ -182,9 +173,10 @@ public class Send implements Runnable {
         byte[] result = new byte[1 + data.length];
         result[0] = type;
         System.arraycopy(data, 0, result, 1, data.length);
-
         return result;
     }
 
-    public void stop() {running=false;}
+    public void stop() {
+        running = false;
+    }
 }
