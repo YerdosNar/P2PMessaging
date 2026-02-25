@@ -1,19 +1,31 @@
 #!/usr/bin/env bash
 
-if [ "$1" == "-c" ]; then
+cleanup() {
     echo "Cleaning..."
     rm *.class
     rm -rf received_files
+}
+
+compile-execute() {
+    local file="$1"
+    local stripped=${file%.*};
+    if [[ ! -f "${stripped}.class"|| $file -nt "${stripped}.class" ]]; then
+        echo "Compiling $stripped"
+        javac $file
+    else
+        echo "Already compiled"
+    fi
+
+    echo "Executing $stripped"
+    java $stripped
+}
+
+if [ "$1" == "-c" ]; then
+    cleanup
 elif [ "$1" == "-r" ]; then
-    echo "Compiling Rendezvous.java"
-    javac Rendezvous.java
-    echo "Executing Rendezvous on port: default=8888"
-    java Rendezvous
+    compile-execute Rendezvous.java
 elif [ "$1" == "-p" ]; then
-    echo "Compiling Peer.java"
-    javac Peer.java
-    echo "Executing Peer..."
-    java Peer
+    compile-execute Peer.java
 else
     echo "Compiling..."
     javac *.java

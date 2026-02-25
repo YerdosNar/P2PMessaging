@@ -7,6 +7,9 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.util.Arrays;
+import java.util.Scanner;
 
 public class Receive implements Runnable {
     private String peerName = "Peer"; // fallback name
@@ -14,10 +17,17 @@ public class Receive implements Runnable {
     private final DataInputStream dIn;
     private final Crypto crypto;
     private volatile boolean running = true;
+    private Scanner sc = new Scanner(System.in);
 
+    // Handle File writing
     private OutputStream fOut;
     private long expectedFileSize;
     private long currentFileBytesReceived;
+
+    // Handle SHA256 checksum
+    private MessageDigest fileDigest;
+    private byte[] expectedHash;
+    private Path currentSavePath;
 
     // Directory where received files are saved
     private static final String DOWNLOAD_DIR = "received_files";
@@ -51,6 +61,7 @@ public class Receive implements Runnable {
             System.arraycopy(plaintext, 1, payload, 0, payload.length);
 
             peerName = new String(payload, "UTF-8");
+            System.out.print("\r");
             LogUtils.info("[" + peerName + " joined the chat]");
             System.out.print(localName + ": ");
         }
@@ -58,8 +69,8 @@ public class Receive implements Runnable {
             LogUtils.error("Failed to read Peer's name: "+ e.getMessage());
         }
 
-        try {
-            while (running) {
+        while (running) {
+            try {
                 length = dIn.readInt();
                 encrypted = new byte[length];
                 dIn.readFully(encrypted);
@@ -83,12 +94,13 @@ public class Receive implements Runnable {
                     LogUtils.error("[Unknown TYPE: "+type+"]");
                 }
             }
-        }
-        catch (IOException ioe) {
-            System.err.println("Connecion closed");
-        }
-        catch (Exception e) {
-            System.err.println("Decrypt error: " + e.getMessage());
+            catch (IOException ioe) {
+                if (running) System.err.println("Connecion closed");
+                running = false; // to brake the loop
+            }
+            catch (Exception e) {
+                if (running) System.err.println("Decrypt error: " + e.getMessage());
+            }
         }
     }
 
@@ -109,10 +121,19 @@ public class Receive implements Runnable {
         expectedFileSize = buffer.getLong();
         currentFileBytesReceived = 0;
 
-        String safeName = Paths.get(currentFileName).getFileName().toString();
-        Path savePath = resolveUnique(Paths.get(DOWNLOAD_DIR, safeName));
+        // Initialize fileDigest only when metadata is received
+        if (buffer.remaining() >= 32) {
+            expectedHash = new byte[32];
+            buffer.get(expectedHash);
+        }
+        else {
+            expectedHash = null;
+        }
+        fileDigest = MessageDigest.getInstance("SHA-256");
 
-        fOut = Files.newOutputStream(savePath);
+        String safeName = Paths.get(currentFileName).getFileName().toString();
+        currentSavePath = resolveUnique(Paths.get(DOWNLOAD_DIR, safeName));
+        fOut = Files.newOutputStream(currentSavePath);
 
         if (expectedFileSize >= 1024) {
             double expectedFileSizeKB = expectedFileSize * 1.0 / 1024.0;
@@ -133,6 +154,7 @@ public class Receive implements Runnable {
         if (fOut == null) return;
 
         fOut.write(payload);
+        fileDigest.update(payload);
         currentFileBytesReceived += payload.length;
 
         LogUtils.printProgressBar(currentFileBytesReceived, expectedFileSize);
@@ -140,10 +162,31 @@ public class Receive implements Runnable {
         if (currentFileBytesReceived >= expectedFileSize) {
             fOut.close();
             fOut = null;
+
+            byte[] correctHash = fileDigest.digest();
             System.out.println();
-            LogUtils.info("[File received fully]");
+            if (Arrays.equals(correctHash, expectedHash)) {
+                LogUtils.success("[Checksum \033[1;32mVERIFIED\033[0m. File not corrupted]");
+            }
+            else {
+                LogUtils.warn("[\033[1;33mWARNING\033[0m: Checksum MISMATCH! File may be corrupted]");
+                System.out.println("    Expected: " + toHex(expectedHash));
+                System.out.println("    Correct : " + toHex(correctHash));
+                System.out.println("Delete or Save [D/s]: ");
+                String deleteOrSave = sc.next();
+                if (!deleteOrSave.equalsIgnoreCase("s")) {
+                    LogUtils.info("Deleting the file: " + currentSavePath);
+                    Files.deleteIfExists(currentSavePath);
+                }
+            }
             System.out.print(localName + ": ");
         }
+    }
+
+    private String toHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b:bytes) sb.append(String.format("%02x", b));
+        return sb.toString();
     }
 
     /**
