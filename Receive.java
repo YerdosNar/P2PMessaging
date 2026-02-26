@@ -100,6 +100,7 @@ public class Receive implements Runnable {
             }
             catch (Exception e) {
                 if (running) System.err.println("Decrypt error: " + e.getMessage());
+                running = false;
             }
         }
     }
