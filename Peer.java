@@ -334,8 +334,25 @@ public class Peer {
 
         try {
             if (choice == 1) {
-                System.out.print("Peer IP: ");
-                String ip = peer.sc.nextLine();
+                String ip = "";
+                System.out.print("IP/Domain name [i/D]: ");
+                String ipOrDomain = peer.sc.nextLine();
+                if (ipOrDomain.equalsIgnoreCase("i")) {
+                    System.out.print("Peer IP: ");
+                    ip = peer.sc.nextLine();
+                }
+                else {
+                    System.out.print("Peer's Domain name: ");
+                    String domName = peer.sc.nextLine();
+                    try {
+                        InetAddress inetAddress = InetAddress.getByName(domName);
+                        ip = inetAddress.getHostAddress();
+                    }
+                    catch (UnknownHostException e) {
+                        LogUtils.error("Failed to resolve IP for domain: " + domName);
+                        e.printStackTrace();
+                    }
+                }
                 System.out.print("Port: ");
                 int port = peer.sc.nextInt();
                 peer.sc.nextLine();
