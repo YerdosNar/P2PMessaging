@@ -10,13 +10,16 @@ import java.util.Random;
 import java.util.Scanner;
 
 public class Peer {
+    private static final String TRAVERSAL_PUNCH = "PUNCH";
+    private static final String TRAVERSAL_RELAY = "RELAY";
+
     private Socket socket;
     private Crypto crypto;
     private Send sender;
     private Receive receiver;
     private final Scanner sc = new Scanner(System.in);
 
-    public void punch(String vpsIp, int vpsPort, int listenPort) throws Exception {
+    public void punch(String vpsIp, int vpsPort, int listenPort, String traversalMode) throws Exception {
         LogUtils.info("Connecting to rendezvous server...");
         Socket vps = new Socket(vpsIp, vpsPort);
         LogUtils.success("Connected to \033[1;36m" + vpsIp + "\033[0m:\033[1;35m" + vpsPort + "\033[0m\n");
@@ -61,6 +64,7 @@ public class Peer {
         // ---- End handshake ----
 
         out.writeInt(listenPort);
+        out.writeUTF(traversalMode);
         out.flush();
 
         String role = in.readUTF();
@@ -133,25 +137,57 @@ public class Peer {
             int peerExtPort = in.readInt(); // peer's external port as seen by VPS
             int myExtPort   = in.readInt(); // my own external port as seen by VPS
             int myLocalPort = vps.getLocalPort(); // local port NAT mapped to myExtPort
-            vps.close();
 
             LogUtils.info("Hole punching to \033[1;36m" + peerIp
                 + "\033[0m:\033[1;35m" + peerExtPort + "\033[0m");
             LogUtils.info("Binding local port \033[1;36m" + myLocalPort
                 + "\033[0m (mapped externally to \033[1;35m" + myExtPort + "\033[0m)");
 
-            socket = holePunch(peerIp, peerExtPort, myLocalPort);
+            Socket punchedSocket = holePunch(peerIp, peerExtPort, myLocalPort);
 
-            if (socket != null) {
+            if (punchedSocket != null) {
                 LogUtils.success("Hole punch succeeded!");
-                doKeyExchange();
-                startChat();
+                out.writeUTF("PUNCH_OK");
             } else {
                 LogUtils.warn("Hole punch failed (likely symmetric NAT).");
-                LogUtils.warn("Please restart and enter 0 for both peers to use RELAY mode.");
+                out.writeUTF("PUNCH_FAIL");
+            }
+
+            out.flush();
+
+            String finalMode = in.readUTF(); // "DIRECT_OK" or "RELAY"
+
+            if (finalMode.equals("DIRECT_OK")) {
+                if (punchedSocket == null) {
+                    vps.close();
+                    throw new IOException("Server selected DIRECT_OK but local hole punch failed");
+                }
+
+                vps.close();
+                socket = punchedSocket;
+                doKeyExchange();
+                startChat();
+            }
+            else if (finalMode.equals("RELAY")) {
+                if (punchedSocket != null) {
+                    punchedSocket.close();
+                }
+
+                LogUtils.info("Falling back to relay mode.");
+                LogUtils.info("Traffic is still end-to-end encrypted — VPS sees only ciphertext.");
+                socket = vps;
+                doKeyExchange();
+                startChat();
+            }
+            else {
+                vps.close();
+                if (punchedSocket != null) {
+                    punchedSocket.close();
+                }
+                throw new IOException("Unknown final mode after punch: " + finalMode);
             }
         } else if (role.equals("RELAY")) {
-            LogUtils.info("Using relay mode (same LAN or symmetric NAT detected).");
+            LogUtils.info("Using relay mode.");
             LogUtils.info("Traffic is still end-to-end encrypted — VPS sees only ciphertext.");
             socket = vps;
             doKeyExchange();
@@ -388,11 +424,17 @@ public class Peer {
                 String vpsPortStr = peer.sc.nextLine();
                 int vpsPort = vpsPortStr.isEmpty() ? 8888 : Integer.parseInt(vpsPortStr);
 
-                System.out.print("Port forwarded? Enter port (or 0 for HOLE-PUNCH/RELAY): ");
+                System.out.print("Port forwarded? Enter port (or 0 if none): ");
                 String listenPortStr = peer.sc.nextLine();
                 int listenPort = listenPortStr.isEmpty() ? 0 : Integer.parseInt(listenPortStr);
 
-                peer.punch(vpsIp, vpsPort, listenPort);
+                System.out.print("Traversal mode [P/r] (P = punch with relay fallback, r = relay only): ");
+                String modeInput = peer.sc.nextLine().trim();
+                String traversalMode = modeInput.equalsIgnoreCase("r")
+                    ? TRAVERSAL_RELAY
+                    : TRAVERSAL_PUNCH;
+
+                peer.punch(vpsIp, vpsPort, listenPort, traversalMode);
             }
         }
         catch (Exception e) {

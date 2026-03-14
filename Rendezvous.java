@@ -14,6 +14,10 @@ import java.util.concurrent.TimeUnit;
 public class Rendezvous {
     private static final int PORT = 8888;
     private static final int WAIT_TIMEOUT_MINUTES = 3;
+    private static final int PUNCH_STATUS_TIMEOUT_MS = 25_000;
+
+    private static final String MODE_PUNCH = "PUNCH";
+    private static final String MODE_RELAY = "RELAY";
 
     // Map of session ID -> waiting HOST peer
     private static final ConcurrentHashMap<String, WaitEntry> waiting = new ConcurrentHashMap<>();
@@ -171,24 +175,32 @@ public class Rendezvous {
         // Both peers sent their listenPort immediately after receiving WAITING/FOUND
         int listenPort1 = in1.readInt();
         int listenPort2 = in2.readInt();
+        String mode1 = normalizeTraversalMode(in1.readUTF());
+        String mode2 = normalizeTraversalMode(in2.readUTF());
 
         boolean pf1 = listenPort1 >= 1024 && listenPort1 <= 65535;
         boolean pf2 = listenPort2 >= 1024 && listenPort2 <= 65535;
 
         LogUtils.info("Peer 1: forwarded=\033[1;36m" + (pf1 ? listenPort1 : "\033[0mnone")
-            + "\033[0m nat_port=\033[1;35m" + natPort1 + "\033[0m");
+            + "\033[0m nat_port=\033[1;35m" + natPort1 + "\033[0m mode=\033[1;33m"
+            + mode1 + "\033[0m");
         LogUtils.info("Peer 2: forwarded=\033[1;36m" + (pf2 ? listenPort2 : "\033[0mnone")
-            + "\033[0m nat_port=\033[1;35m" + natPort2 + "\033[0m");
+            + "\033[0m nat_port=\033[1;35m" + natPort2 + "\033[0m mode=\033[1;33m"
+            + mode2 + "\033[0m");
 
-        if (pf1) {
+        // If either side forces relay, skip all direct attempts.
+        if (MODE_RELAY.equals(mode1) || MODE_RELAY.equals(mode2)) {
+            startRelayMode(peer1, out1, peer2, out2, "forced by peer preference");
+        }
+        else if (pf1) {
             out1.writeUTF("LISTEN");
             out1.writeInt(listenPort1);
             out1.writeUTF(addr2);
             out1.flush();
 
             out2.writeUTF("CONNECT");
-            out2.writeInt(listenPort1);
             out2.writeUTF(addr1);
+            out2.writeInt(listenPort1);
             out2.flush();
 
             LogUtils.info("Mode: PORT-FORWARD (Peer2 -> Peer1:\033[1;35m" + listenPort1 + "\033[0m)");
@@ -228,29 +240,93 @@ public class Rendezvous {
             out1.flush();
             out2.flush();
 
-            LogUtils.info("Mode: HOLE-PUNCH (\033[1;36m"
+            LogUtils.info("Mode: HOLE-PUNCH ATTEMPT (\033[1;36m"
                 + addr1 + "\033[0m:\033[1;35m" + natPort1
                 + "\033[0m <-> \033[1;36m"
                 + addr2 + "\033[0m:\033[1;35m" + natPort2 + "\033[0m)");
 
-            peer1.close();
-            peer2.close();
+            finalizePunchOrFallback(peer1, in1, out1, peer2, in2, out2);
         }
         else {
-            // Same public IP = LAN, or symmetric NAT -> RELAY
-            out1.writeUTF("RELAY");
+            startRelayMode(peer1, out1, peer2, out2,
+                "same public IP (LAN/symmetric NAT ambiguity)");
+        }
+
+        System.out.println("===========================================\n");
+    }
+
+    private static String normalizeTraversalMode(String mode) {
+        if (mode == null) return MODE_PUNCH;
+
+        String upper = mode.trim().toUpperCase();
+        if (upper.equals(MODE_RELAY)) {
+            return MODE_RELAY;
+        }
+        return MODE_PUNCH;
+    }
+
+    private static String readPunchStatus(Socket peer, DataInputStream in, String label) {
+        int oldTimeout;
+        try {
+            oldTimeout = peer.getSoTimeout();
+        }
+        catch (IOException e) {
+            oldTimeout = 0;
+        }
+
+        try {
+            peer.setSoTimeout(PUNCH_STATUS_TIMEOUT_MS);
+            String status = in.readUTF();
+            if (!"PUNCH_OK".equals(status) && !"PUNCH_FAIL".equals(status)) {
+                LogUtils.warn("Unexpected punch status from " + label + ": " + status);
+                return "PUNCH_FAIL";
+            }
+            return status;
+        }
+        catch (IOException e) {
+            LogUtils.warn("No punch status from " + label + " (timeout/disconnect)");
+            return "PUNCH_FAIL";
+        }
+        finally {
+            try { peer.setSoTimeout(oldTimeout); } catch (IOException ignored) {}
+        }
+    }
+
+    private static void finalizePunchOrFallback(Socket peer1, DataInputStream in1, DataOutputStream out1,
+                                                Socket peer2, DataInputStream in2, DataOutputStream out2) throws IOException {
+        String status1 = readPunchStatus(peer1, in1, "Peer1");
+        String status2 = readPunchStatus(peer2, in2, "Peer2");
+
+        if ("PUNCH_OK".equals(status1) && "PUNCH_OK".equals(status2)) {
+            out1.writeUTF("DIRECT_OK");
             out1.flush();
-            out2.writeUTF("RELAY");
+            out2.writeUTF("DIRECT_OK");
             out2.flush();
 
-            LogUtils.info("Mode: RELAY (same public IP or symmetric NAT)");
-
-            Thread t1 = new Thread(() -> relay(peer1, peer2, "Peer1->Peer2"));
-            Thread t2 = new Thread(() -> relay(peer2, peer1, "Peer2->Peer1"));
-            t1.start();
-            t2.start();
+            LogUtils.success("Mode: HOLE-PUNCH established");
+            peer1.close();
+            peer2.close();
+            return;
         }
-        System.out.println("===========================================\n");
+
+        LogUtils.warn("Hole-punch failed (Peer1=" + status1 + ", Peer2=" + status2 + "), falling back to RELAY");
+        startRelayMode(peer1, out1, peer2, out2, "hole-punch failure");
+    }
+
+    private static void startRelayMode(Socket peer1, DataOutputStream out1,
+                                       Socket peer2, DataOutputStream out2,
+                                       String reason) throws IOException {
+        out1.writeUTF("RELAY");
+        out1.flush();
+        out2.writeUTF("RELAY");
+        out2.flush();
+
+        LogUtils.info("Mode: RELAY (" + reason + ")");
+
+        Thread t1 = new Thread(() -> relay(peer1, peer2, "Peer1->Peer2"));
+        Thread t2 = new Thread(() -> relay(peer2, peer1, "Peer2->Peer1"));
+        t1.start();
+        t2.start();
     }
 
     private static void relay(Socket from, Socket to, String name) {
